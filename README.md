@@ -1,3 +1,4 @@
+
 # CertLogManager
 
 ## Overview
@@ -6,8 +7,7 @@ CertLogManager is a PowerShell-based tool designed to manage and inspect digital
 ## Features
 - **Certificate Management**: View and manage certificates in the Current User and Local Machine stores.
 - **Certificate Inspection**: Check certificate validity, view details, and open certificates in the Windows certificate viewer.
-- **Disallowed Certificates**: View and manage certificates in the Disallowed store.
-- **File Signature Scanning**: Scan critical directories for `.exe` and `.dll` files with bad or missing signatures using sigcheck.
+- **File Signature Scanning**: Scan critical directories for `.exe` and `.dll` files with bad or missing signatures using sigcheck. (TODO)
 
 ## Prerequisites
 - **PowerShell**: The script requires PowerShell 5.1 or later.
@@ -22,9 +22,7 @@ CertLogManager is a PowerShell-based tool designed to manage and inspect digital
 2. **Certificate Management**:
    - Use the "Current User" and "Local Machine" tabs to view and manage certificates.
    - Click on a certificate to view its details, check its validity, or open it in the Windows certificate viewer.
-3. **Disallowed Certificates**:
-   - Use the "Disallowed" tab to view and manage certificates in the Disallowed store.
-4. **File Signature Scanning**:
+3. **File Signature Scanning**:
    - Use the "Scan Files" tab to scan critical directories for files with bad or missing signatures.
    - Click the "Scan Critical Files" button to start the scan.
 
@@ -44,4 +42,4 @@ CertLogManager is a PowerShell-based tool designed to manage and inspect digital
 This project is open-source and available under the MIT License.
 
 ## Contributing
-Contributions are welcome! Please feel free to submit a Pull Request. 
+Contributions are welcome! Please feel free to submit a Pull Request.
