@@ -36,7 +36,7 @@ CertLogManager is a PowerShell-based tool designed to manage and inspect digital
 - **Performance Optimization**: Optimize the script for better performance, especially when scanning large directories.
 
 ## Suggested Name
-- **CertGuard**: A name that reflects the tool's purpose of guarding and managing certificates.
+- **CertGuard**: A name that reflects the tool's purpose of guarding and managing certificates. Suggestions? CertLogManager sounds good?
 
 ## License
 This project is open-source and available under the MIT License.
