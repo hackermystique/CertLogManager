@@ -46,7 +46,21 @@ SecCertGuard simply calls sigcheck via command-line and does not modify, embed, 
 - **CertGuard**: A name that reflects the tool's purpose of guarding and managing certificates. Suggestions? SecCertGuard sounds good?
 
 ## License
-This project is open-source and available under the MIT License.
+
+This project is licensed under the MIT License.
+
+© 2025 [Your Name or Org]
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+> The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+**Third-Party Notice – Sysinternals Sigcheck**  
+This project uses the Microsoft Sysinternals tool `sigcheck.exe` or `sigcheck64.exe`, which is not distributed with this repository.  
+Use of sigcheck is subject to [Microsoft Sysinternals License Terms](https://learn.microsoft.com/sysinternals/license-terms).  
+You can download sigcheck from the official [Sysinternals site](https://learn.microsoft.com/sysinternals/downloads/sigcheck).
+
+SecCertGuard only invokes the tool externally and does not distribute or modify it in any form.
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
