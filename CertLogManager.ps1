@@ -7,10 +7,9 @@
 
 .NOTES
     Author: @hackermystike - Julio Iglesias Perez
-    Version: 1.0
-    Date: $(Get-Date -Format '2025-05-14')
+    Version: 1.1
+    Date: $(Get-Date -Format '2025-05-17')
 #>
-
 # Load required assemblies
 try {
     Add-Type -AssemblyName PresentationFramework
@@ -18,50 +17,12 @@ try {
     Add-Type -AssemblyName WindowsBase
 }
 catch {
-    $errorMessage = "Failed to load WPF assemblies: $($_.Exception.Message)"
-    Write-Error $errorMessage
+    Write-Error "Failed to load WPF assemblies: $($_.Exception.Message)"
     exit 1
 }
 
 # Initialize variable for sigcheck path
 $sigcheckPath = $null
-
-# Initialize log file path
-$logFile = Join-Path $PSScriptRoot "logs\\last.log"
-
-# Check if last.log exists
-if (Test-Path $logFile) {
-    # Improved confirmation message with file location
-    $message = "The log file exists at: $logFile`nDo you want to keep it for future reference?"
-    $result = [System.Windows.MessageBox]::Show($message, "Log File Management", [System.Windows.MessageBoxButton]::YesNo, [System.Windows.MessageBoxImage]::Question)
-
-    # Handle user decision
-    if ($result -eq [System.Windows.MessageBoxResult]::No) {
-        try {
-            Remove-Item $logFile -Force -ErrorAction Stop
-            Write-Host "Log file successfully removed: $logFile"
-        }
-        catch {
-            $errorMessage = "Failed to remove log file: $logFile. Error: $($_.Exception.Message)"
-            Write-Error $errorMessage
-            Add-Content -Path $logFile -Value $errorMessage  # Log the error for later review
-            [System.Windows.MessageBox]::Show("Failed to remove the log file. Please check the permissions.")
-        }
-    }
-} else {
-    Write-Host "Log file does not exist. Proceeding without removing."
-    # Optionally, create a new log file
-    New-Item -Path $logFile -ItemType File -Force
-}
-
-# Create logs directory and last.log if they don't exist
-$logDir = Join-Path $PSScriptRoot "logs"
-if (-not (Test-Path $logDir)) {
-    New-Item -ItemType Directory -Path $logDir -Force | Out-Null
-}
-if (-not (Test-Path $logFile)) {
-    New-Item -ItemType File -Path $logFile -Force | Out-Null
-}
 
 # Check if sigcheck.exe or sigcheck64.exe is in PATH
 if (Get-Command "sigcheck.exe" -ErrorAction SilentlyContinue) {
@@ -97,28 +58,17 @@ Write-Host "Using sigcheck at: $sigcheckPath"
 $tempFile = Join-Path $env:TEMP "sigcheck_output.txt"
 Write-Host "Temp file path: $tempFile"
 
-# Create the temp file if it doesn't exist
-if (-not (Test-Path $tempFile)) {
-    New-Item -ItemType File -Path $tempFile -Force | Out-Null
-    Write-Host "Created new temp file: $tempFile"
-}
-
 # Remove existing temp file if it exists
 if (Test-Path $tempFile) {
     $result = [System.Windows.MessageBox]::Show(
-        "Do you want to keep the temporary file for future use?`n$tempFile",
-        "Keep Temporary File?",
+        "Found existing temp file`n$tempFile",
+        "Would you like to keep working with it?",
         [System.Windows.MessageBoxButton]::YesNo,
         [System.Windows.MessageBoxImage]::Question
-    )
-
-    if ($result -eq [System.Windows.MessageBoxResult]::No) {
+    )} elseif ($result -eq [System.Windows.MessageBoxResult]::No) {
         try {
             Remove-Item $tempFile -Force -ErrorAction Stop
             Write-Host "Temporary file removed: $tempFile"
-            # Create a new empty temp file
-            New-Item -ItemType File -Path $tempFile -Force | Out-Null
-            Write-Host "Created new empty temp file: $tempFile"
         }
         catch {
             [System.Windows.MessageBox]::Show(
@@ -129,10 +79,10 @@ if (Test-Path $tempFile) {
             )
         }
     }
-    else {        
+    else {
         Write-Host "Temporary file kept: $tempFile"
     }
-}
+
 
 # Load function to get SHA-256 hash
 function Get-CertHashSHA256 {
@@ -172,10 +122,7 @@ function Get-CertificateStatus {
     )
     try {
         # Check if certificate is within its validity period
-        $now = Get-Date
-        if ($now -lt $cert.NotBefore -or $now -gt $cert.NotAfter) {
-            return "Error"
-        }
+    $now = Get-Date
 
         # Check certificate chain
         $chain = New-Object System.Security.Cryptography.X509Certificates.X509Chain
@@ -191,14 +138,22 @@ function Get-CertificateStatus {
         if ($isValid) {
             foreach ($status in $chain.ChainStatus) {
                 if ($status.Status -ne [System.Security.Cryptography.X509Certificates.X509ChainStatusFlags]::NoError) {
-                    return "Error"
+                    if ($now -lt $cert.NotBefore) {
+                        return "Error. Not Yet Valid"
+                    }
+                    elseif ($now -gt $cert.NotAfter) {
+                        return "Error. Expired"
+                    }
+                    return "Error. $($status.StatusInformation)"
                 }
             }
             return "Valid"
-        } else {
-            return "Error"
         }
-    } catch {
+        else {
+            return "Error. $($status.StatusInformation)"
+        }
+    }
+    catch {
         return "Not checked"
     }
 }
@@ -270,7 +225,8 @@ function Get-CheckCertificateLocally {
                         $removeButton.IsEnabled = $true
                         $revokeButton = $button.Parent.Children[5]
                         $revokeButton.IsEnabled = $true
-                    } elseif ($response.Content -match "Revoked \[by SHA-256\(SubjectPublicKeyInfo\)\]") {
+                    }
+                    elseif ($response.Content -match "Revoked \[by SHA-256\(SubjectPublicKeyInfo\)\]") {
                         $crtResultText.Text = "crt.sh: Certificate revoked by Google"
                         $crtResultText.Foreground = [System.Windows.Media.Brushes]::Red
                         $card.Background = [System.Windows.Media.Brushes]::LightPink
@@ -278,7 +234,8 @@ function Get-CheckCertificateLocally {
                         $removeButton.IsEnabled = $true
                         $revokeButton = $button.Parent.Children[5]
                         $revokeButton.IsEnabled = $true
-                    } elseif ($response.Content -match "Revoked \[by MD5\(PublicKey\)\]") {
+                    }
+                    elseif ($response.Content -match "Revoked \[by MD5\(PublicKey\)\]") {
                         $crtResultText.Text = "crt.sh: Certificate revoked by Microsoft"
                         $crtResultText.Foreground = [System.Windows.Media.Brushes]::Red
                         $card.Background = [System.Windows.Media.Brushes]::LightPink
@@ -286,7 +243,8 @@ function Get-CheckCertificateLocally {
                         $removeButton.IsEnabled = $true
                         $revokeButton = $button.Parent.Children[5]
                         $revokeButton.IsEnabled = $true
-                    } elseif ($response.Content -match "Revoked \[by Issuer Name, Serial Number\]") {
+                    }
+                    elseif ($response.Content -match "Revoked \[by Issuer Name, Serial Number\]") {
                         $crtResultText.Text = "crt.sh: Certificate revoked by Mozilla"
                         $crtResultText.Foreground = [System.Windows.Media.Brushes]::Red
                         $card.Background = [System.Windows.Media.Brushes]::LightPink
@@ -294,23 +252,17 @@ function Get-CheckCertificateLocally {
                         $removeButton.IsEnabled = $true
                         $revokeButton = $button.Parent.Children[5]
                         $revokeButton.IsEnabled = $true
-                    } elseif ($response.Content -match "Expired") {
-                        $crtResultText.Text = "crt.sh: Certificate expired"
-                        $crtResultText.Foreground = [System.Windows.Media.Brushes]::Orange
-                        $card.Background = [System.Windows.Media.Brushes]::LightYellow
-                        $removeButton = $button.Parent.Children[4]
-                        $removeButton.IsEnabled = $true
-                        $revokeButton = $button.Parent.Children[5]
-                        $revokeButton.IsEnabled = $true
-                    } else {
+                    }
+                    else {
                         $crtResultText.Text = "crt.sh: Certificate valid"
                         $crtResultText.Foreground = [System.Windows.Media.Brushes]::Green
                         $card.Background = [System.Windows.Media.Brushes]::LightGreen
                     }
                     # Disable the check button after use
                     $button.IsEnabled = $false
-                } catch {
-                    $crtResultText.Text = "crt.sh: Error checking certificate"
+                }
+                catch {
+                    $crtResultText.Text = "Error checking certificate - $($_.Exception.Message)"
                     $crtResultText.Foreground = [System.Windows.Media.Brushes]::Red
                     $card.Background = [System.Windows.Media.Brushes]::LightPink
                     $removeButton = $button.Parent.Children[4]
@@ -629,64 +581,91 @@ $userOnlyStores = @('UserDS')
 if (-not (Test-Path $tempFile)) {
     try {
         Write-Host "Generating sigcheck output at startup..."
-        $loggedCerts = Get-ValidCertificateLog
-        $output = & $sigcheckPath -accepteula -t * -r -a
-        
-        if ($output) {
-            # Filter out logged certificates if not scanning all
-            if ($loggedCerts.Count -gt 0) {
-                $output = $output | Where-Object {
-                    $line = $_
-                    -not ($loggedCerts | Where-Object { $line -match $_.Thumbprint })
+        $rawOutput = & $sigcheckPath -accepteula -t * -r -a
+
+        if ($rawOutput) {
+            $seenThumbprints = @{}
+            $currentBlock = @()
+            $thumbprint = $null
+
+            foreach ($line in $rawOutput) {
+                $currentBlock += $line
+
+                # Capture thumbprint if seen
+                if ($line -match 'Thumbprint\s*:\s*(.+)') {
+                    $thumbprint = $matches[1].Trim()
+                }
+
+                # Block ends on empty line
+                if ($line -match '^\s*$') {
+                    if ($thumbprint -and -not $seenThumbprints.ContainsKey($thumbprint)) {
+                        Add-Content -Path $tempFile -Value (($currentBlock -join "`n") + "`n`n")
+                        $seenThumbprints[$thumbprint] = $true
+                    }
+
+                    # Reset state for next block
+                    $currentBlock = @()
+                    $thumbprint = $null
                 }
             }
-            
-            $output | Out-File -FilePath $tempFile -Encoding UTF8 -Force
-            Write-Host "Sigcheck output file created: $tempFile"
-        } else {
+
+            # Handle last block if not written (no trailing blank line)
+            if ($thumbprint -and -not $seenThumbprints.ContainsKey($thumbprint) -and $currentBlock.Count -gt 0) {
+                Add-Content -Path $tempFile -Value (($currentBlock -join "`n") + "`n`n")
+            }
+
+            Write-Host "Unique sigcheck certificate output written to: $tempFile"
+        }
+        else {
             Write-Host "No output generated from sigcheck at startup"
         }
-    } catch {
+    }
+    catch {
         Write-Host "Error running sigcheck at startup: $($_.Exception.Message)"
     }
 }
+
 
 # Add this function before the Set-Panel function
 function Show-ProgressWindow {
     param (
         [string]$Title,
-        [string]$Message
+        [string]$Message,
+        [int]$Maximum
     )
-    
+
     $progressWindow = New-Object System.Windows.Window
     $progressWindow.Title = $Title
     $progressWindow.Width = 400
     $progressWindow.Height = 150
     $progressWindow.WindowStartupLocation = "CenterScreen"
     $progressWindow.Topmost = $true
-    
+
     $stackPanel = New-Object System.Windows.Controls.StackPanel
     $stackPanel.Margin = New-Object System.Windows.Thickness(10)
     $stackPanel.HorizontalAlignment = "Center"
-    
+
     $textBlock = New-Object System.Windows.Controls.TextBlock
     $textBlock.Text = $Message
     $textBlock.Margin = New-Object System.Windows.Thickness(0, 0, 0, 10)
     $textBlock.TextWrapping = "Wrap"
     $textBlock.TextAlignment = "Center"
-    
-    $progressRing = New-Object System.Windows.Controls.ProgressBar
-    $progressRing.Height = 40
-    $progressRing.Width = 40
-    $progressRing.IsIndeterminate = $true
-    
+
+    $progressBar = New-Object System.Windows.Controls.ProgressBar
+    $progressBar.Height = 20
+    $progressBar.Width = 300
+    $progressBar.IsIndeterminate = $false
+    $progressBar.Minimum = 0
+    $progressBar.Maximum = $Maximum
+    $progressBar.Value = 0
+
     [void]$stackPanel.Children.Add($textBlock)
-    [void]$stackPanel.Children.Add($progressRing)
-    
+    [void]$stackPanel.Children.Add($progressBar)
+
     $progressWindow.Content = $stackPanel
     $progressWindow.Show()
-    
-    return $progressWindow
+
+    return @{ Window = $progressWindow; ProgressBar = $progressBar }
 }
 
 # Update Set-Panel to handle pre-checked certificates
@@ -697,14 +676,49 @@ function Set-Panel {
         [bool]$isDisallowedTab = $false
     )
     try {
-        # Add notification text at the top
-        $notificationText = New-Object System.Windows.Controls.TextBlock
-        $notificationText.Text = "Recommended: Download latest certificates from Microsoft PKI Repository (https://www.microsoft.com/pkiops/docs/repository.htm)"
-        $notificationText.Background = [System.Windows.Media.Brushes]::LightYellow
-        $notificationText.Padding = New-Object System.Windows.Thickness(10)
-        $notificationText.Margin = New-Object System.Windows.Thickness(5)
-        $notificationText.TextWrapping = "Wrap"
-        [void]$panel.Children.Add($notificationText)
+        # Add only the hyperlink at the top (no notification text)
+        $hyperlink = New-Object System.Windows.Documents.Hyperlink
+        $hyperlink.NavigateUri = "https://www.microsoft.com/pkiops/docs/repository.htm"
+        $hyperlink.Inlines.Add("Microsoft PKI Repository")
+        $hyperlink.Foreground = [System.Windows.Media.Brushes]::Blue
+        $hyperlink.TextDecorations = [System.Windows.TextDecorations]::Underline
+        $hyperlink.Add_Click({
+                Start-Process "https://www.microsoft.com/pkiops/docs/repository.htm"
+            })
+
+        # Add only the hyperlink at the top (no notification text)
+        $hyperlink2 = New-Object System.Windows.Documents.Hyperlink
+        $hyperlink2.NavigateUri = "https://learn.microsoft.com/en-us/windows-server/identity/ad-cs/configure-trusted-roots-disallowed-certificates"
+        $hyperlink2.Inlines.Add("Configure certificates in Windows")
+        $hyperlink2.Foreground = [System.Windows.Media.Brushes]::Blue
+        $hyperlink2.TextDecorations = [System.Windows.TextDecorations]::Underline
+        $hyperlink2.Add_Click({
+                Start-Process "https://learn.microsoft.com/en-us/windows-server/identity/ad-cs/configure-trusted-roots-disallowed-certificates"
+            })
+        
+        # Add only the hyperlink at the top (no notification text)
+        $hyperlink3 = New-Object System.Windows.Documents.Hyperlink
+        $hyperlink3.NavigateUri = "https://learn.microsoft.com/en-us/windows-server/identity/ad-cs/configure-trusted-roots-disallowed-certificates"
+        $hyperlink3.Inlines.Add("Install Trusted TPM Root Certificates")
+        $hyperlink3.Foreground = [System.Windows.Media.Brushes]::Blue
+        $hyperlink3.TextDecorations = [System.Windows.TextDecorations]::Underline
+        $hyperlink3.Add_Click({
+                Start-Process "https://learn.microsoft.com/en-us/windows-server/security/guarded-fabric-shielded-vm/guarded-fabric-install-trusted-tpm-root-certificates"
+            })
+
+        $hyperlinkTextBlock = New-Object System.Windows.Controls.TextBlock
+        $hyperlinkTextBlock.Inlines.Add("Resources:  [ ")
+        $hyperlinkTextBlock.Inlines.Add($hyperlink)
+        $hyperlinkTextBlock.Inlines.Add(" ]  [ ")
+        $hyperlinkTextBlock.Inlines.Add($hyperlink3)
+        $hyperlinkTextBlock.Inlines.Add(" ]  [ ")
+        $hyperlinkTextBlock.Inlines.Add($hyperlink2)
+        $hyperlinkTextBlock.Inlines.Add(" ]")
+        $hyperlinkTextBlock.Background = [System.Windows.Media.Brushes]::LightYellow
+        $hyperlinkTextBlock.Padding = New-Object System.Windows.Thickness(10)
+        $hyperlinkTextBlock.Margin = New-Object System.Windows.Thickness(5)
+        $hyperlinkTextBlock.TextWrapping = "Wrap"
+        [void]$panel.Children.Add($hyperlinkTextBlock)
 
         Write-Host "Accessing path: $path"
         $stores = Get-ChildItem -Path $path -ErrorAction Stop
@@ -740,7 +754,7 @@ function Set-Panel {
                         $status = Get-CertificateStatus -cert $cert
                         $checkedCerts += @{
                             'Certificate' = $cert
-                            'Status' = $status
+                            'Status'      = $status
                         }
                     }
                     
@@ -756,11 +770,12 @@ function Set-Panel {
                     
                     $storeCerts[$store.Name] = @{
                         'Certs' = $sortedCerts
-                        'Path' = $path
+                        'Path'  = $path
                     }
                     $totalCerts += $certs.Count
                 }
-            } catch {
+            }
+            catch {
                 Write-Warning "Failed to access store $($store.Name): $($_.Exception.Message)"
             }
         }
@@ -799,7 +814,8 @@ function Set-Panel {
                             if ($certCard) {
                                 [void]$storePanel.Children.Add($certCard)
                             }
-                        } catch {
+                        }
+                        catch {
                             Write-Warning "Error processing certificate: $($_.Exception.Message)"
                         }
                     }
@@ -809,7 +825,8 @@ function Set-Panel {
                     [void]$panel.Children.Add($groupBox)
                 }
             }
-        } else {
+        }
+        else {
             # Process common stores
             foreach ($storeName in $commonStores) {
                 if ($storeCerts.ContainsKey($storeName)) {
@@ -836,39 +853,41 @@ function Set-Panel {
                             $checkAllButton.Tag = $storeName
                             
                             $checkAllButton.Add_Click({
-                                $storeName = $_.Source.Tag
-                                $expander = $_.Source.Parent.Parent.Content
-                                $storePanel = $expander.Content
+                                    $storeName = $_.Source.Tag
+                                    $expander = $_.Source.Parent.Parent.Content
+                                    $storePanel = $expander.Content
                                 
-                                # Show progress window
-                                $progressWindow = Show-ProgressWindow -Title "Checking Certificates" -Message "Checking certificates in $storeName store... Please wait."
+                                    # Show progress window
+                                    $progressWindow = Show-ProgressWindow -Title "Checking Certificates" -Message "Checking certificates in $storeName store... Please wait."
                                 
-                                try {
-                                    # Find all "Check in Host" buttons in this store panel
-                                    foreach ($child in $storePanel.Children) {
-                                        if ($child -is [System.Windows.Controls.Border]) {
-                                            $stackPanel = $child.Child
-                                            $buttonPanel = $stackPanel.Children[2]  # The button panel is the 3rd child
+                                    try {
+                                        # Find all "Check in Host" buttons in this store panel
+                                        $progressBar = $progressWindow.ProgressBar
+                                        foreach ($child in $storePanel.Children) {
+                                            if ($child -is [System.Windows.Controls.Border]) {
+                                                $stackPanel = $child.Child
+                                                $buttonPanel = $stackPanel.Children[2]  # The button panel is the 3rd child
                                             
-                                            # The "Check in Host" button is the 3rd button (index 2)
-                                            $sigcheckButton = $buttonPanel.Children[2]
+                                                # The "Check in Host" button is the 3rd button (index 2)
+                                                $sigcheckButton = $buttonPanel.Children[2]
                                             
-                                            # Only click if button is enabled
-                                            if ($sigcheckButton.IsEnabled) {
-                                                $sigcheckButton.RaiseEvent(
+                                                # Only click if button is enabled
+                                                if ($sigcheckButton.IsEnabled) {
+                                                    $sigcheckButton.RaiseEvent(
                                                     (New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent))
-                                                )
-                                                # Add a small delay to prevent overwhelming the system
-                                                Start-Sleep -Milliseconds 100
+                                                    )
+                                                    # Add a small delay to prevent overwhelming the system
+                                                    Start-Sleep -Milliseconds 100
+                                                }
                                             }
+                                        
                                         }
                                     }
-                                }
-                                finally {
-                                    # Close progress window
-                                    $progressWindow.Close()
-                                }
-                            })
+                                    finally {
+                                        # Close progress window
+                                        $progressWindow.Window.Close()
+                                    }
+                                })
                             
                             [void]$headerPanel.Children.Add($checkAllButton)
                         }
@@ -887,7 +906,8 @@ function Set-Panel {
                                 if ($certCard) {
                                     [void]$storePanel.Children.Add($certCard)
                                 }
-                            } catch {
+                            }
+                            catch {
                                 Write-Warning "Error processing certificate: $($_.Exception.Message)"
                             }
                         }
@@ -926,39 +946,39 @@ function Set-Panel {
                                 $checkAllButton.Tag = $storeName
                                 
                                 $checkAllButton.Add_Click({
-                                    $storeName = $_.Source.Tag
-                                    $expander = $_.Source.Parent.Parent.Content
-                                    $storePanel = $expander.Content
+                                        $storeName = $_.Source.Tag
+                                        $expander = $_.Source.Parent.Parent.Content
+                                        $storePanel = $expander.Content
                                     
-                                    # Show progress window
-                                    $progressWindow = Show-ProgressWindow -Title "Checking Certificates" -Message "Checking certificates in $storeName store... Please wait."
+                                        # Show progress window
+                                        $progressWindow = Show-ProgressWindow -Title "Checking Certificates" -Message "Checking certificates in $storeName store... Please wait."
                                     
-                                    try {
-                                        # Find all "Check in Host" buttons in this store panel
-                                        foreach ($child in $storePanel.Children) {
-                                            if ($child -is [System.Windows.Controls.Border]) {
-                                                $stackPanel = $child.Child
-                                                $buttonPanel = $stackPanel.Children[2]  # The button panel is the 3rd child
+                                        try {
+                                            # Find all "Check in Host" buttons in this store panel
+                                            foreach ($child in $storePanel.Children) {
+                                                if ($child -is [System.Windows.Controls.Border]) {
+                                                    $stackPanel = $child.Child
+                                                    $buttonPanel = $stackPanel.Children[2]  # The button panel is the 3rd child
                                                 
-                                                # The "Check in Host" button is the 3rd button (index 2)
-                                                $sigcheckButton = $buttonPanel.Children[2]
+                                                    # The "Check in Host" button is the 3rd button (index 2)
+                                                    $sigcheckButton = $buttonPanel.Children[2]
                                                 
-                                                # Only click if button is enabled
-                                                if ($sigcheckButton.IsEnabled) {
-                                                    $sigcheckButton.RaiseEvent(
+                                                    # Only click if button is enabled
+                                                    if ($sigcheckButton.IsEnabled) {
+                                                        $sigcheckButton.RaiseEvent(
                                                         (New-Object System.Windows.RoutedEventArgs ([System.Windows.Controls.Button]::ClickEvent))
-                                                    )
-                                                    # Add a small delay to prevent overwhelming the system
-                                                    Start-Sleep -Milliseconds 100
+                                                        )
+                                                        # Add a small delay to prevent overwhelming the system
+                                                        Start-Sleep -Milliseconds 100
+                                                    }
                                                 }
                                             }
                                         }
-                                    }
-                                    finally {
-                                        # Close progress window
-                                        $progressWindow.Close()
-                                    }
-                                })
+                                        finally {
+                                            # Close progress window
+                                            $progressWindow.Window.Close()
+                                        }
+                                    })
                                 
                                 [void]$headerPanel.Children.Add($checkAllButton)
                             }
@@ -977,7 +997,8 @@ function Set-Panel {
                                     if ($certCard) {
                                         [void]$storePanel.Children.Add($certCard)
                                     }
-                                } catch {
+                                }
+                                catch {
                                     Write-Warning "Error processing certificate: $($_.Exception.Message)"
                                 }
                             }
@@ -1023,7 +1044,8 @@ function Set-Panel {
                                     if ($certCard) {
                                         [void]$storePanel.Children.Add($certCard)
                                     }
-                                } catch {
+                                }
+                                catch {
                                     Write-Warning "Error processing certificate: $($_.Exception.Message)"
                                 }
                             }
@@ -1052,87 +1074,63 @@ function Set-Panel {
         
         if (-not $isDisallowedTab) {
             if ($panel.Name -eq "currentUserPanel") {
-                # Add remove duplicate button for CurrentUser tab
-                $filterButton = New-Object System.Windows.Controls.Button
-                $filterButton.Content = "Filter Repeated Certificates"
-                $filterButton.Margin = New-Object System.Windows.Thickness(10, 0, 0, 0)
-                $filterButton.Padding = New-Object System.Windows.Thickness(5, 2, 5, 2)
-                $filterButton.Background = [System.Windows.Media.Brushes]::LightBlue
-                
-                $filterButton.Add_Click({
-                    $panel = $_.Source.Parent.Parent
-                    $path = "Cert:\CurrentUser"
-                    $otherPath = "Cert:\LocalMachine"
-                    
-                    # Store the count panel
-                    $countPanel = $panel.Children[0]
-                    
-                    # Clear existing content except the count panel
-                    $panel.Children.Clear()
-                    [void]$panel.Children.Add($countPanel)
-                    
-                    # Get all stores for the current path
-                    $stores = Get-ChildItem -Path $path -ErrorAction SilentlyContinue
-                    $totalCerts = 0
-                    
-                    foreach ($store in $stores) {
-                        if ($store.Name -eq 'Disallowed') { continue }
-                        
-                        $certs = Get-ChildItem -Path "$path\$($store.Name)" -ErrorAction SilentlyContinue
-                        $otherCerts = Get-ChildItem -Path "$otherPath\$($store.Name)" -ErrorAction SilentlyContinue
-                        
-                        if ($certs) {
-                            $uniqueCerts = @()
-                            foreach ($cert in $certs) {
-                                $existsInOther = $otherCerts | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
-                                if (-not $existsInOther) {
-                                    $uniqueCerts += $cert
-                                }
-                            }
-                            
-                            if ($uniqueCerts.Count -gt 0) {
-                                $totalCerts += $uniqueCerts.Count
-                                
-                                $groupBox = New-Object System.Windows.Controls.GroupBox
-                                $groupBox.Header = "$($store.Name) ($($uniqueCerts.Count))"
-                                $groupBox.Margin = New-Object System.Windows.Thickness(5)
-                                
-                                $expander = New-Object System.Windows.Controls.Expander
-                                $expander.IsExpanded = $false
-                                $expander.Header = "Click to expand/collapse"
-                                
-                                $storePanel = New-Object System.Windows.Controls.StackPanel
-                                foreach ($cert in $uniqueCerts) {
-                                    try {
-                                        $status = Get-CertificateStatus -cert $cert
-                                        $certCard = Get-CheckCertificateLocally -cert $cert -storeName $store.Name -status $status
-                                        if ($certCard) {
-                                            [void]$storePanel.Children.Add($certCard)
-                                        }
-                                    } catch {
-                                        Write-Warning "Error processing certificate: $($_.Exception.Message)"
-                                    }
-                                }
-                                
-                                $expander.Content = $storePanel
-                                $groupBox.Content = $expander
-                                [void]$panel.Children.Add($groupBox)
+                # Automatically filter repeated certificates at load
+                $panel.Children.Clear()
+                [void]$panel.Children.Add($countPanel)
+                $filterPath = "Cert:\CurrentUser"
+                $otherPath = "Cert:\LocalMachine"
+                $stores = Get-ChildItem -Path $filterPath -ErrorAction SilentlyContinue
+                $totalCerts = 0
+                foreach ($store in $stores) {
+                    if ($store.Name -eq 'Disallowed') { continue }
+                    $certs = Get-ChildItem -Path "$filterPath\$($store.Name)" -ErrorAction SilentlyContinue
+                    $otherCerts = Get-ChildItem -Path "$otherPath\$($store.Name)" -ErrorAction SilentlyContinue
+                    if ($certs) {
+                        $uniqueCerts = @()
+                        foreach ($cert in $certs) {
+                            $existsInOther = $otherCerts | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
+                            if (-not $existsInOther) {
+                                $uniqueCerts += $cert
                             }
                         }
+                        if ($uniqueCerts.Count -gt 0) {
+                            $totalCerts += $uniqueCerts.Count
+                            $groupBox = New-Object System.Windows.Controls.GroupBox
+                            $groupBox.Header = "$($store.Name) ($($uniqueCerts.Count))"
+                            $groupBox.Margin = New-Object System.Windows.Thickness(5)
+                            $expander = New-Object System.Windows.Controls.Expander
+                            $expander.IsExpanded = $false
+                            $expander.Header = "Click to expand/collapse"
+                            $storePanel = New-Object System.Windows.Controls.StackPanel
+                            foreach ($cert in $uniqueCerts) {
+                                try {
+                                    $status = Get-CertificateStatus -cert $cert
+                                    $certCard = Get-CheckCertificateLocally -cert $cert -storeName $store.Name -status $status
+                                    if ($certCard) {
+                                        [void]$storePanel.Children.Add($certCard)
+                                    }
+                                }
+                                catch {
+                                    Write-Warning "Error processing certificate: $($_.Exception.Message)"
+                                }
+                            }
+                            $expander.Content = $storePanel
+                            $groupBox.Content = $expander
+                            [void]$panel.Children.Add($groupBox)
+                        }
                     }
-                    
-                    # Update total count
-                    $totalCountText = $countPanel.Children[0]
-                    $totalCountText.Text = "Total Certificates: $totalCerts"
-                })
-                
-                [void]$countPanel.Children.Add($filterButton)
+                }
+                # Update total count
+                $totalCountText.Text = "Total Certificates: $totalCerts"
+                [void]$panel.Children.Add($countPanel)
+                return
             }
         }
         
         [void]$panel.Children.Insert(0, $countPanel)
         
-    } catch {
+    }
+    catch {
         Write-Warning "Failed to access path ${path}: $($_.Exception.Message)"
     }
 }
@@ -1148,14 +1146,6 @@ function Set-Panel {
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <Border Grid.Row="0" Background="LightYellow" BorderBrush="Orange" BorderThickness="1" Margin="5" Padding="10">
-            <TextBlock>
-                <Run Text="Recommended: Download latest certificates from "/>
-                <Hyperlink Name="pkiRepositoryLink">
-                    Microsoft PKI Repository
-                </Hyperlink>
-            </TextBlock>
-        </Border>
         <TabControl Grid.Row="1" Name="tabControl" Margin="5">
             <TabItem Header="Current User">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Auto">
@@ -1236,6 +1226,11 @@ try {
     $window.ShowDialog()
 }
 catch {
-    Write-Error "Error initializing window: $($_.Exception.Message)"
-    exit 1
+    [System.Windows.MessageBox]::Show(
+        "Error loading XAML:`n$($_.Exception.Message)",
+        "XAML Load Error",
+        [System.Windows.MessageBoxButton]::OK,
+        [System.Windows.MessageBoxImage]::Error
+    )
+    # Do not exit, allow the script to continue or end gracefully
 }
