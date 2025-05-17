@@ -1,8 +1,8 @@
 
-# CertLogManager
+# SecCertGuard
 
 ## Overview
-CertLogManager is a PowerShell-based tool designed to manage and inspect digital certificates on Windows systems. It provides a graphical user interface (GUI) to view, check, and manage certificates stored in the Current User and Local Machine certificate stores. Additionally, it includes a feature to scan critical directories for files with bad or missing signatures using sigcheck.
+SecCertGuard is a PowerShell-based tool designed to manage and inspect digital certificates on Windows systems. It provides a graphical user interface (GUI) to view, check, and manage certificates stored in the Current User and Local Machine certificate stores. Additionally, it includes a feature to scan critical directories for files with bad or missing signatures using sigcheck.
 
 ## Features
 - **Certificate Management**: View and manage certificates in the Current User and Local Machine stores.
@@ -17,7 +17,7 @@ CertLogManager is a PowerShell-based tool designed to manage and inspect digital
 ## Usage
 1. **Run the Script**: Execute the script in PowerShell:
    ```powershell
-   .\CertLogManager.ps1
+   .\SecCertGuard.ps1
    ```
 2. **Certificate Management**:
    - Use the "Current User" and "Local Machine" tabs to view and manage certificates.
@@ -31,8 +31,10 @@ CertLogManager is a PowerShell-based tool designed to manage and inspect digital
 This project uses [Sysinternals sigcheck](https://learn.microsoft.com/es-mx/sysinternals/downloads/sigcheck), a Microsoft tool, for file signature verification.
 The tool is not included in this repository and must be downloaded separately by the user from the official Microsoft Sysinternals site.
 Use of sigcheck is subject to the [Sysinternals Software License Terms](https://learn.microsoft.com/es-mx/sysinternals/license-terms).
-CertLogManager simply calls sigcheck via command-line and does not modify, embed, or distribute it in any form.
-- **sigcheck**: A command-line utility from Sysinternals used to verify file signatures. Ensure it is available in the PATH or in the `Tools` folder.
+SecCertGuard simply calls sigcheck via command-line and does not modify, embed, or distribute it in any form.
+- **sigcheck**: A command-line utility from Sysinternals used to verify file signatures. Ensure to install [Systernals Suite](https://apps.microsoft.com/detail/9p7knl5rwt25) or download sigcheck64.exe into `Tools` directory.
+### Optional
+- Alternative blend: CertSentinel, TrustAudit, X509Inspector.
 
 ## Future Improvements (Beta)
 - **Enhanced Scanning**: Add support for scanning additional directories and file types.
@@ -41,7 +43,7 @@ CertLogManager simply calls sigcheck via command-line and does not modify, embed
 - **Performance Optimization**: Optimize the script for better performance, especially when scanning large directories.
 
 ## Suggested Name
-- **CertGuard**: A name that reflects the tool's purpose of guarding and managing certificates. Suggestions? CertLogManager sounds good?
+- **CertGuard**: A name that reflects the tool's purpose of guarding and managing certificates. Suggestions? SecCertGuard sounds good?
 
 ## License
 This project is open-source and available under the MIT License.
