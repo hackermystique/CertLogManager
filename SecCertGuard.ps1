@@ -9,6 +9,12 @@
     Author: @hackermystike - Julio Iglesias Perez
     Version: 1.1
     Date: $(Get-Date -Format '2025-05-17')
+
+This script may invoke Microsoft Sysinternals' `sigcheck.exe` for file signature verification.
+Sysinternals tools are not included and must be downloaded by the user.
+
+Use of `sigcheck` is subject to:
+https://learn.microsoft.com/sysinternals/license-terms
 #>
 # Load required assemblies
 try {
