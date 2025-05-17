@@ -27,6 +27,11 @@ CertLogManager is a PowerShell-based tool designed to manage and inspect digital
    - Click the "Scan Critical Files" button to start the scan.
 
 ## Dependencies
+⚠️ Sysinternals License Notice
+This project uses [Sysinternals sigcheck](https://learn.microsoft.com/es-mx/sysinternals/downloads/sigcheck), a Microsoft tool, for file signature verification.
+The tool is not included in this repository and must be downloaded separately by the user from the official Microsoft Sysinternals site.
+Use of sigcheck is subject to the [Sysinternals Software License Terms](https://learn.microsoft.com/es-mx/sysinternals/license-terms).
+CertLogManager simply calls sigcheck via command-line and does not modify, embed, or distribute it in any form.
 - **sigcheck**: A command-line utility from Sysinternals used to verify file signatures. Ensure it is available in the PATH or in the `Tools` folder.
 
 ## Future Improvements (Beta)
