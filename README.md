@@ -49,8 +49,8 @@ SecSecCertGuard simply calls sigcheck via command-line and does not modify, embe
 - **SecCertGuard**: A name that reflects the tool's purpose of guarding and managing certificates. Suggestions? SecSecCertGuard sounds good?
 
 ## More info
-[PKI Repository - Microsoft PKI Services](https://learn.microsoft.com/en-us/windows-server/security/guarded-fabric-shielded-vm/guarded-fabric-install-trusted-tpm-root-certificates)
-[Install trusted TPM root certificates](https://www.microsoft.com/pkiops/docs/repository.htm)
+- [PKI Repository - Microsoft PKI Services](https://learn.microsoft.com/en-us/windows-server/security/guarded-fabric-shielded-vm/guarded-fabric-install-trusted-tpm-root-certificates)
+- [Install trusted TPM root certificates](https://www.microsoft.com/pkiops/docs/repository.htm)
 
 ## License
 
