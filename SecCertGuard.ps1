@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-    CertLogManager is a PowerShell-based tool for managing and inspecting digital certificates on Windows systems.
+    SecCertGuard is a PowerShell-based tool for managing and inspecting digital certificates on Windows systems.
 
 .DESCRIPTION
     This script provides a graphical user interface (GUI) to view, check, and manage certificates stored in the Current User and Local Machine certificate stores. It also includes a feature to scan critical directories for files with bad or missing signatures using sigcheck.
@@ -9,12 +9,6 @@
     Author: @hackermystike - Julio Iglesias Perez
     Version: 1.1
     Date: $(Get-Date -Format '2025-05-17')
-
-This script may invoke Microsoft Sysinternals' `sigcheck.exe` for file signature verification.
-Sysinternals tools are not included and must be downloaded by the user.
-
-Use of `sigcheck` is subject to:
-https://learn.microsoft.com/sysinternals/license-terms
 #>
 # Load required assemblies
 try {
@@ -71,7 +65,8 @@ if (Test-Path $tempFile) {
         "Would you like to keep working with it?",
         [System.Windows.MessageBoxButton]::YesNo,
         [System.Windows.MessageBoxImage]::Question
-    )} elseif ($result -eq [System.Windows.MessageBoxResult]::No) {
+    )
+    if ($result -eq [System.Windows.MessageBoxResult]::No) {
         try {
             Remove-Item $tempFile -Force -ErrorAction Stop
             Write-Host "Temporary file removed: $tempFile"
@@ -88,7 +83,167 @@ if (Test-Path $tempFile) {
     else {
         Write-Host "Temporary file kept: $tempFile"
     }
+}
 
+
+function LaunchCertificateViewer {
+    param (
+        [System.Security.Cryptography.X509Certificates.X509Certificate2]$Certificate,
+        [string]$StoreName,
+        [string]$StoreLocation
+    )
+
+    Add-Type -AssemblyName PresentationFramework, PresentationCore, WindowsBase, System.Windows.Forms, System.Security
+
+    $xaml = @"
+<Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Certificate Manager" Height="500" Width="900"
+        WindowStartupLocation="CenterScreen">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" Margin="10">
+            <Label Content="Store:" VerticalAlignment="Center"/>
+            <ComboBox x:Name="storeSelect" Width="200" Margin="5" IsEnabled="False">
+                <ComboBoxItem>My (Current User)</ComboBoxItem>
+                <ComboBoxItem>Root (Root Authorities)</ComboBoxItem>
+                <ComboBoxItem>CA (Intermediate Authorities)</ComboBoxItem>
+                <ComboBoxItem>TrustedPeople</ComboBoxItem>
+                <ComboBoxItem>TrustedPublisher</ComboBoxItem>
+            </ComboBox>
+            <TextBlock x:Name="storeInfo" VerticalAlignment="Center" Margin="10" FontWeight="Bold"/>
+        </StackPanel>
+        <DataGrid x:Name="certGrid" Grid.Row="1" AutoGenerateColumns="False" IsReadOnly="True" Margin="10">
+            <DataGrid.ContextMenu>
+                <ContextMenu>
+                    <MenuItem Header="View details" x:Name="viewCert"/>
+                    <MenuItem Header="Delete" x:Name="deleteCert"/>
+                    <MenuItem Header="Export" x:Name="exportCert"/>
+                </ContextMenu>
+            </DataGrid.ContextMenu>
+            <DataGrid.Columns>
+                <DataGridTextColumn Header="Issued to" Binding="{Binding Subject}" Width="*"/>
+                <DataGridTextColumn Header="Issued by" Binding="{Binding Issuer}" Width="*"/>
+                <DataGridTextColumn Header="Expires" Binding="{Binding Expiration}" Width="150"/>
+                <DataGridTextColumn Header="Location" Binding="{Binding StoreLocation}" Width="150"/>
+                <DataGridTextColumn Header="Store" Binding="{Binding StoreName}" Width="150"/>
+            </DataGrid.Columns>
+        </DataGrid>
+    </Grid>
+</Window>
+"@
+
+    $reader = New-Object System.Xml.XmlTextReader([System.IO.StringReader]$xaml)
+    $window = [Windows.Markup.XamlReader]::Load($reader)
+
+    $storeSelect = $window.FindName("storeSelect")
+    $storeInfo = $window.FindName("storeInfo")
+    $certGrid = $window.FindName("certGrid")
+    $viewCert = $window.FindName("viewCert")
+    $deleteCert = $window.FindName("deleteCert")
+    $exportCert = $window.FindName("exportCert")
+
+    # Set the store information in the UI
+    $storeInfo.Text = "$StoreLocation - $StoreName"
+
+    # Try to select the matching store in the dropdown
+    for ($i = 0; $i -lt $storeSelect.Items.Count; $i++) {
+        $item = $storeSelect.Items[$i]
+        if ($item.Content -like "$StoreName*") {
+            $storeSelect.SelectedIndex = $i
+            break
+        }
+    }
+
+function LoadCertificates {
+    $selectedStore = $StoreName
+    $store = New-Object System.Security.Cryptography.X509Certificates.X509Store $selectedStore, $StoreLocation
+    try {
+        $store.Open("ReadOnly")
+        # Wrap results in array subexpression to ensure collection
+        $certs = @($store.Certificates | Where-Object { $_.Thumbprint -eq $Certificate.Thumbprint } | ForEach-Object {
+            [PSCustomObject]@{
+                Subject       = $_.Subject
+                Issuer        = $_.Issuer
+                Expiration    = $_.NotAfter.ToString("dd/MM/yyyy")
+                StoreLocation = $StoreLocation
+                StoreName     = $StoreName
+                RawCert       = $_
+            }
+        })
+        $certGrid.ItemsSource = [System.Collections.Generic.List[Object]]$certs
+    } finally {
+        $store.Close()
+    }
+}
+    function DeleteCertificate {
+        $item = $certGrid.SelectedItem
+        if ($null -ne $item) {
+            $cert = $item.RawCert
+            $selectedStore = $StoreName
+            $store = New-Object System.Security.Cryptography.X509Certificates.X509Store $selectedStore, $StoreLocation
+            try {
+                $store.Open("ReadWrite")
+                try {
+                    $store.Remove($cert)
+                    [System.Windows.MessageBox]::Show("Certificate deleted.", "Success", 'OK', 'Information')
+                    
+                } catch {
+                    [System.Windows.MessageBox]::Show(
+                        "Could not delete the certificate: $($_.Exception.Message)`nTry running as administrator if deleting from LocalMachine.",
+                        "Delete Error",
+                        [System.Windows.MessageBoxButton]::OK,
+                        [System.Windows.MessageBoxImage]::Warning
+                    )
+                }
+            } finally {
+                LoadCertificates
+                $store.Close()
+            }
+        }
+    }
+
+    function ExportCertificate {
+        $item = $certGrid.SelectedItem
+        if ($null -ne $item) {
+            $cert = $item.RawCert
+            $dialog = New-Object System.Windows.Forms.SaveFileDialog
+            $dialog.Filter = "DER Certificate (*.cer)|*.cer|Base64 Certificate (*.cer)|*.cer|All files (*.*)|*.*"
+            $dialog.FileName = "cert_exported.cer"
+            if ($dialog.ShowDialog() -eq "OK") {
+                if ($dialog.FilterIndex -eq 1) {
+                    # DER format
+                    [System.IO.File]::WriteAllBytes($dialog.FileName, $cert.RawData)
+                } else {
+                    # Base64 format
+                    $base64 = [Convert]::ToBase64String($cert.RawData)
+                    $pem = "-----BEGIN CERTIFICATE-----`n"
+                    $pem += $base64 -replace ".{64}", "$&`n"
+                    $pem += "-----END CERTIFICATE-----"
+                    [System.IO.File]::WriteAllText($dialog.FileName, $pem)
+                }
+                [System.Windows.MessageBox]::Show("Certificate exported to:`n$($dialog.FileName)", "Exported", 'OK', 'Information')
+            }
+        }
+    }
+
+    $viewCert.Add_Click({
+        $item = $certGrid.SelectedItem
+        if ($null -ne $item) {
+            [System.Security.Cryptography.X509Certificates.X509Certificate2UI]::DisplayCertificate($item.RawCert)
+        }
+    })
+    $deleteCert.Add_Click({ DeleteCertificate })
+    $exportCert.Add_Click({ ExportCertificate })
+
+    # Load certificates automatically when window opens
+    LoadCertificates
+
+    $window.ShowDialog() | Out-Null
+}
 
 # Load function to get SHA-256 hash
 function Get-CertHashSHA256 {
@@ -446,6 +601,9 @@ function Get-CheckCertificateLocally {
                     $button.IsEnabled = $false
                 }
             })
+        
+        # $currentUserStores = (Get-ChildItem -Path Cert:\CurrentUser | Select-Object -ExpandProperty Name)
+        $localMachineStores = (Get-ChildItem -Path Cert:\LocalMachine | Select-Object -ExpandProperty Name)
 
         $wincheckButton = New-Object System.Windows.Controls.Button
         $wincheckButton.Content = "Open"
@@ -457,17 +615,19 @@ function Get-CheckCertificateLocally {
             StoreName   = $storeName
         }
         $wincheckButton.Add_Click({
-                $button = $_.Source
-                $cert = $button.Tag.Certificate
-                $storeName = $button.Tag.StoreName
+            $cert = $_.Source.Tag.Certificate
+            $storeName = $_.Source.Tag.StoreName
             
-                try {
-                    Get-WindowCertificate -cert $cert -storeName $storeName
-                }
-                catch {
-                    [System.Windows.MessageBox]::Show("Error opening certificate card: $($_.Exception.Message)", "Error")
-                }
-            })
+            # Determine store location (LocalMachine or CurrentUser)
+            $storeLocation = if ($storeName -in $localMachineStores) {
+                "LocalMachine"
+            } else {
+                "CurrentUser"
+            }
+            
+            # Launch the certificate viewer with the certificate and store info
+            LaunchCertificateViewer -Certificate $cert -StoreName $storeName -StoreLocation $storeLocation
+        })
         
         $removeButton = New-Object System.Windows.Controls.Button
         $removeButton.Content = "Remove Certificate"
@@ -868,7 +1028,7 @@ function Set-Panel {
                                 
                                     try {
                                         # Find all "Check in Host" buttons in this store panel
-                                        $progressBar = $progressWindow.ProgressBar
+                                        # $progressBar = $progressWindow.ProgressBar
                                         foreach ($child in $storePanel.Children) {
                                             if ($child -is [System.Windows.Controls.Border]) {
                                                 $stackPanel = $child.Child
@@ -1239,4 +1399,95 @@ catch {
         [System.Windows.MessageBoxImage]::Error
     )
     # Do not exit, allow the script to continue or end gracefully
+}
+
+
+function Show-CertificateWithStore {
+    param (
+        [Parameter(Mandatory)]
+        [string]$Thumbprint
+    )
+
+    $thumbNorm = $Thumbprint.Replace(" ", "").ToUpper()
+    $stores = @(
+        @{ Name = "My";              Location = "CurrentUser" }
+        @{ Name = "Root";            Location = "CurrentUser" }
+        @{ Name = "CA";              Location = "CurrentUser" }
+        @{ Name = "TrustedPeople";   Location = "CurrentUser" }
+        @{ Name = "TrustedPublisher";Location = "CurrentUser" }
+
+        @{ Name = "My";              Location = "LocalMachine" }
+        @{ Name = "Root";            Location = "LocalMachine" }
+        @{ Name = "CA";              Location = "LocalMachine" }
+        @{ Name = "TrustedPeople";   Location = "LocalMachine" }
+        @{ Name = "TrustedPublisher";Location = "LocalMachine" }
+    )
+
+    foreach ($s in $stores) {
+        $store = New-Object System.Security.Cryptography.X509Certificates.X509Store $s.Name, $s.Location
+        try {
+            $store.Open("ReadOnly")
+            foreach ($cert in $store.Certificates) {
+                if ($cert.Thumbprint.Replace(" ", "").ToUpper() -eq $thumbNorm) {
+
+                    $win = New-Object Windows.Window
+                    $win.Title = "Certificate Found"
+                    $win.Width = 500
+                    $win.Height = 200
+                    $win.WindowStartupLocation = 'CenterScreen'
+
+                    $stack = New-Object Windows.Controls.StackPanel
+                    $text = New-Object Windows.Controls.TextBlock
+                    $text.Text = "Location: $($s.Location)`nStore: $($s.Name)`nIssued to: $($cert.Subject)`nIssued by: $($cert.Issuer)`nValid until: $($cert.NotAfter)"
+                    $text.Margin = '10'
+                    $stack.Children.Add($text)
+
+                    $button = New-Object Windows.Controls.Button
+                    $button.Content = "View Certificate"
+                    $button.Margin = '10'
+                    $button.Add_Click({ [System.Security.Cryptography.X509Certificates.X509Certificate2UI]::DisplayCertificate($cert) })
+                    $stack.Children.Add($button)
+
+                    $win.Content = $stack
+                    $win.ShowDialog() | Out-Null
+                    return
+                }
+            }
+        } finally {
+            $store.Close()
+        }
+    }
+
+    [System.Windows.MessageBox]::Show("Certificate with the specified thumbprint was not found.", "Not found", 'OK', 'Warning')
+}
+
+function Show-CertificateFromFile {
+    param (
+        [Parameter(Mandatory)]
+        [string]$Path
+    )
+    if (-not (Test-Path $Path)) {
+        Write-Error "File not found: $Path"
+        return
+    }
+    $cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate2 $Path
+    Show-CertificateWithStore -Thumbprint $cert.Thumbprint
+}
+
+
+# XML Certificate Viewer Interface (Auto-load on Open)
+# This can be triggered from the Open button
+function LaunchCertificateViewerFromOpen {
+    $certPath = [System.Windows.Forms.OpenFileDialog]::new()
+    $certPath.Filter = "Cert Files (*.cer, *.crt)|*.cer;*.crt|All Files (*.*)|*.*"
+    if ($certPath.ShowDialog() -eq "OK") {
+        Show-CertificateFromFile -Path $certPath.FileName
+    }
+}
+function ShowCertificateViewerFromOpen {
+    $certPath = [System.Windows.Forms.OpenFileDialog]::new()
+    $certPath.Filter = "Cert Files (*.cer, *.crt)|*.cer;*.crt|All Files (*.*)|*.*"
+    if ($certPath.ShowDialog() -eq "OK") {
+        Show-CertificateFromFile -Path $certPath.FileName
+    }
 }
