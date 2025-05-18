@@ -1,7 +1,7 @@
-# SecCertGuard
+# SecSecCertGuard
 
 ## Overview
-SecCertGuard is a PowerShell-based tool designed to manage and inspect digital certificates on Windows systems. It provides a graphical user interface (GUI) to view, check, and manage certificates stored in the Current User and Local Machine certificate stores. Additionally, it includes a feature to scan critical directories for files with bad or missing signatures using sigcheck.
+SecSecCertGuard is a PowerShell-based tool designed to manage and inspect digital certificates on Windows systems. It provides a graphical user interface (GUI) to view, check, and manage certificates stored in the Current User and Local Machine certificate stores. Additionally, it includes a feature to scan critical directories for files with bad or missing signatures using sigcheck.
 
 **All interface elements, messages, and comments are now fully in English for a consistent user experience.**
 
@@ -19,7 +19,7 @@ SecCertGuard is a PowerShell-based tool designed to manage and inspect digital c
 ## Usage
 1. **Run the Script**: Execute the script in PowerShell:
    ```powershell
-   .\SecCertGuard.ps1
+   .\SecSecCertGuard.ps1
    ```
 2. **Certificate Management**:
    - Use the "Current User" and "Local Machine" tabs to view and manage certificates.
@@ -33,7 +33,7 @@ SecCertGuard is a PowerShell-based tool designed to manage and inspect digital c
 This project uses [Sysinternals sigcheck](https://learn.microsoft.com/en-us/sysinternals/downloads/sigcheck), a Microsoft tool, for file signature verification.  
 The tool is not included in this repository and must be downloaded separately by the user from the official Microsoft Sysinternals site.  
 Use of sigcheck is subject to the [Sysinternals Software License Terms](https://learn.microsoft.com/en-us/sysinternals/license-terms).  
-SecCertGuard simply calls sigcheck via command-line and does not modify, embed, or distribute it in any form.
+SecSecCertGuard simply calls sigcheck via command-line and does not modify, embed, or distribute it in any form.
 - **sigcheck**: A command-line utility from Sysinternals used to verify file signatures. Ensure to install [Sysinternals Suite](https://apps.microsoft.com/detail/9p7knl5rwt25) or download sigcheck64.exe into the `Tools` directory.
 
 ### Optional
@@ -46,7 +46,11 @@ SecCertGuard simply calls sigcheck via command-line and does not modify, embed, 
 - **Performance Optimization**: Optimize the script for better performance, especially when scanning large directories.
 
 ## Suggested Name
-- **CertGuard**: A name that reflects the tool's purpose of guarding and managing certificates. Suggestions? SecCertGuard sounds good?
+- **SecCertGuard**: A name that reflects the tool's purpose of guarding and managing certificates. Suggestions? SecSecCertGuard sounds good?
+
+## More info
+[PKI Repository - Microsoft PKI Services](https://learn.microsoft.com/en-us/windows-server/security/guarded-fabric-shielded-vm/guarded-fabric-install-trusted-tpm-root-certificates)
+[Install trusted TPM root certificates](https://www.microsoft.com/pkiops/docs/repository.htm)
 
 ## License
 
@@ -63,7 +67,7 @@ This project uses the Microsoft Sysinternals tool `sigcheck.exe` or `sigcheck64.
 Use of sigcheck is subject to [Microsoft Sysinternals License Terms](https://learn.microsoft.com/en-us/sysinternals/license-terms).  
 You can download sigcheck from the official [Sysinternals site](https://learn.microsoft.com/en-us/sysinternals/downloads/sigcheck).
 
-SecCertGuard only invokes the tool externally and does not distribute or modify it in any form.
+SecSecCertGuard only invokes the tool externally and does not distribute or modify it in any form.
 
 ## Contributing
 Contributions are welcome! Please feel free to submit a Pull Request.
